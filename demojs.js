@@ -13,7 +13,7 @@
 // var offsetX;
 // var offsetY;
 
-var checkbox;
+var checkbox = 0;
 
 function initialize() {
     var config = {};
@@ -25,8 +25,6 @@ function initialize() {
 
     return config;
 }
-
-
 
 function StraightLine(startX,startY,toX,toY) {
     this.color = $('#selColor').val();
@@ -73,6 +71,56 @@ StraightLine.prototype.contains = function(mx, my) {
 
 }
 
+function TrendLine(startX,startY,toX,toY) {
+    this.color = $('#selColor').val();
+    this.width = $('#selWidth').val();
+    this.startX = startX;
+    this.startY = startY;
+    this.toX = toX;
+    this.toY = toY;
+    this.dx = this.toX - this.startX;
+    this.dy = this.toY - this.startY;
+    this.scope = this.dy/this.dx;
+}
+
+TrendLine.prototype.draw = function(ctx) {
+
+    ctx.beginPath();
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = this.width;
+    ctx.moveTo(this.startX, this.startY);
+
+    if(this.dx == 0) {
+        if(this.dy>0){
+            ctx.lineTo(this.startX, Config.canvasele.height);
+        }else{
+            ctx.lineTo(this.startX, 0);
+        }
+    }
+    else if(this.dx > 0) {
+        var newx = Config.canvasele.width;
+        ctx.lineTo(newx, this.scope*(newx-this.startX)+this.startY);
+    }
+    else{
+        console.log(-this.scope*this.startX);
+        ctx.lineTo(0, -this.scope*this.startX + this.startY);
+    }
+    ctx.stroke();
+
+    // draw three dots
+    ctx.beginPath();
+    ctx.fillStyle = Config.dotscolor;
+    ctx.arc(this.startX,this.startY,Config.dotsradius,0,2*Math.PI);
+    ctx.arc(this.toX,this.toY,Config.dotsradius,0,2*Math.PI);
+    ctx.arc((this.startX+this.toX)/2,(this.startY+this.toY)/2,Config.dotsradius,0,2*Math.PI);
+    ctx.fill();
+    ctx.closePath();
+}
+
+TrendLine.prototype.contains = function(mx,my) {
+
+}
+
 function HorizontalLine(X,Y) {
     this.color = $('#selColor').val();
     this.width = $('#selWidth').val();
@@ -99,10 +147,6 @@ HorizontalLine.prototype.draw = function(ctx) {
 HorizontalLine.prototype.contains = function(mx, my) {
     return ( mx <= (this.X + Config.scope)) && ( mx >= (this.X - Config.scope)) &&
         ( my <= (this.Y + Config.scope)) && ( my >= (this.Y - Config.scope)) ;
-
-}
-
-function TrendLine() {
 
 }
 
@@ -133,7 +177,15 @@ function CanvasState(canvas) {
 
   // **** Keep track of state! ****
     this.valid = false; // when set to true, the canvas will redraw everything
-    this.lines = []; //the collection of things to be 
+    this.lines = []; //the collection of things to be
+
+    this.drawing = false; //记录是否在画线（straight/trend）,
+    this.drawingobj = null;
+    this.drawx1 = 0;
+    this.drawy1 = 0;
+    this.drawx2 = 0;
+    this.drawy2 = 0;
+
     this.dragging = false;// keep track of when we are dragging
     // the current selected object. In the future we could turn this into an array for multiple selection
     this.selection = null;
@@ -159,33 +211,48 @@ function CanvasState(canvas) {
     var my = mouse.y;
     var lines = myState.lines;
     var l = lines.length;
-    var isline = false; //是否点到线上的点
+    var isline = false; //是否点到线上的点(false: 增加线，true: 移动线)
+
     for (var i = l-1; i >= 0; i--) {
         console.log(lines[i].contains(mx, my));
         if (lines[i].contains(mx, my)) {
             isline = true;
             var mySel = lines[i];
-
             if (mySel instanceof HorizontalLine) {
-                // Keep track of where in the object we clicked
-                // so we can move it smoothly (see mousemove)
-                // 鼠标位置 - 直线的(x,y)
-                myState.dragoffx = mx - mySel.x;
-                myState.dragoffy = my - mySel.y;
+                myState.dragoffx = mx - mySel.X;
+                myState.dragoffy = my - mySel.Y;
                 myState.dragging = true;
                 myState.selection = mySel;
-                myState.valid = false;
+                //myState.valid = false;
                 return;
             }
         }
     }
 
-      console.log("hori" + $('input:radio[name=line]')[2].checked );
-    if(!isline && $('input:radio[name=line]')[2].checked ) {
-        myState.addLine(new HorizontalLine(mx,my));
-        myState.draw();  //重画
-    }
+      // havent returned means we have failed to select anything.
+      // If there was an object selected, we deselect it
+      if (myState.selection) {
+          myState.selection = null;
+      }
 
+      if(!isline) {
+          if (checkbox == 0) {
+
+          } else if (checkbox == 1) {
+              myState.drawingobj = new TrendLine(mx,my,mx,my);
+              myState.drawing = true;
+              myState.drawx1 = mx;
+              myState.drawy1 = my;
+              myState.drawx2 = mx;
+              myState.drawy2 = my;
+              return;
+          }
+          else if(checkbox == 2){
+                  myState.addLine(new HorizontalLine(mx, my));
+                  myState.draw();  //重画
+                   return;
+              }
+      }
     // havent returned means we have failed to select anything.
     // If there was an object selected, we deselect it
     if (myState.selection) {
@@ -196,15 +263,34 @@ function CanvasState(canvas) {
   }, true);  // The event handler is executed in the capturing phase
   
   canvas.addEventListener('mousemove', function(e) {
-    if (myState.dragging){
       var mouse = myState.getMouse(e);
+    if (myState.dragging){
         if(myState.selection instanceof HorizontalLine) {
-            myState.selection.x = mouse.x = myState.dragoffx;
-            myState.selection.y = mouse.y = myState.dragoffx;
+            console.log(mouse.x);
+            console.log(myState.dragoffx);
+            myState.selection.X = mouse.x - myState.dragoffx;
+            myState.selection.Y = mouse.y - myState.dragoffx;
+            console.log("new x, y " + myState.selection.X + ", " + myState.selection.Y);
         }
-            myState.draw();
+            //myState.draw();
         }
+    //画新的trend line
+    else if(checkbox == 1 && myState.drawing) {
+        myState.drawx2 = mouse.x;
+        myState.drawy2 = mouse.y;
+        myState.drawingobj = new TrendLine(myState.drawx1,myState.drawy1,myState.drawx2,myState.drawy2);
+    }
+      //horizion line的指示线
+      else if (checkbox == 2) {
+        //myState.selection = myState.removeLast();
+        //console.log("mouse x" + mouse.x);
+        //myState.selection.X = mouse.x || 0;
+        //myState.selection.Y = mouse.y || 0;
 
+        myState.removeLast();
+        myState.addLine(new HorizontalLine(mouse.x, mouse.y));
+    }
+      myState.draw();
       //// We don't want to drag the object by its top-left corner, we want to drag it
       //// from where we clicked. Thats why we saved the offset and use it here
       //myState.selection.x = mouse.x - myState.dragoffx;
@@ -215,8 +301,28 @@ function CanvasState(canvas) {
   }, true);
 
     canvas.addEventListener('mouseup', function(e) {
-      myState.dragging = false;
+        if(myState.dragging){
+            //myState.addLine(myState.drawingobj);
+            myState.dragging = false;
+        }
+        if(myState.drawing) {
+            myState.addLine(myState.drawingobj);
+            myState.drawing = false;
+        }
     }, true);
+
+    canvas.addEventListener('mouseenter',function(e){
+        if(checkbox == 2) {
+            var mouse = myState.getMouse(e);
+            myState.addLine(new HorizontalLine(mouse.x, mouse.y));
+        }
+    });
+
+    canvas.addEventListener('mouseout',function(e){
+        if(checkbox == 2) {
+            myState.removeLast();
+        }
+    });
 
   //this.selectionWidth = 2;
   //this.interval = 3000;
@@ -226,7 +332,13 @@ function CanvasState(canvas) {
 
 CanvasState.prototype.addLine = function(line) {
     this.lines.push(line);
-    this.valid = false;
+}
+
+CanvasState.prototype.removeLast = function() {
+    console.log(this.lines);
+    return this.lines.pop();
+    //this.draw();
+    //console.log(this.lines);
 }
 
 // While draw is called as often as the INTERVAL variable demands,
@@ -250,12 +362,28 @@ CanvasState.prototype.draw = function() {
     
     // draw selection
     // right now this is just a stroke along the edge of the selected Shape
-    if (this.selection != null) {
-        console.log("selection!");
-      //ctx.strokeStyle = this.selectionColor;
-      //ctx.lineWidth = this.selectionWidth;
-      //var mySel = this.selection;
-      //ctx.strokeRect(mySel.x,mySel.y,mySel.w,mySel.h);
+    //画选中的水平线
+    if (this.selection != null && this.selection instanceof HorizontalLine) {
+        console.log("hori selection!");
+        var hori = this.selection;
+        ctx.beginPath();
+        ctx.strokeStyle = hori.color;
+        ctx.lineWidth = hori.width;
+        ctx.moveTo(0, hori.Y);
+        ctx.lineTo(Config.canvasele.width,hori.Y);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.fillStyle = Config.dotsselected;
+        ctx.arc(hori.X,hori.Y,Config.dotsradius,0,2*Math.PI);
+        ctx.fill();
+        ctx.closePath();
+    } else if(this.drawingobj != null && this.drawingobj instanceof TrendLine ) {
+        this.drawingobj.startX = this.drawx1;
+        this.drawingobj.startY = this.drawy1;
+        this.drawingobj.toX = this.drawx2;
+        this.drawingobj.toY = this.drawy2;
+        this.drawingobj.draw(ctx);
     }
     
     // ** Add stuff you want drawn on top all the time here **
@@ -287,40 +415,49 @@ CanvasState.prototype.getMouse = function(e) {
   mx = e.pageX - offsetX;
   my = e.pageY - offsetY;
   
-  console.log("x: " + mx);
-  console.log("y: " + my);
+  //console.log("x: " + mx);
+  //console.log("y: " + my);
   // We return a simple javascript object (a hash) with x and y defined
   return {x: mx, y: my};
 }
 
 $(document).ready(function(){
 
-    $("input:radio[value=straignt]").click(function() {
-
+    $("input:radio[value=straight]").click(function() {
         checkbox = 0;
-        console.log("checkbox");
+        console.log(checkbox);
     });
 
     $("input:radio[value=trend]").click(function() {
         checkbox = 1;
-        console.log("checkbox");
+        console.log(checkbox);
     });
-
 
     $("input:radio[value=horizontal]").click(function() {
         checkbox = 2;
-        console.log("checkbox");
+        console.log(checkbox);
     });
 
+
+
     Config = initialize();
+
+    var parent = $(Config.canvasele).parent();
+    Config.canvasele.width = parent.width();
+    Config.canvasele.height = parent.height();
+
     var state = new CanvasState(Config.canvasele);
     console.log(state);
-    state.addLine(new StraightLine(20,20,60,60));
-    state.addLine(new StraightLine(60,20,60,60));
-    state.addLine(new HorizontalLine(50,100));
+    //state.addLine(new StraightLine(20,20,60,60));
+    //state.addLine(new StraightLine(60,20,60,60));
+    //state.addLine(new HorizontalLine(50,100));
+    //state.addLine(new TrendLine(50,100,80,30));
+    state.addLine(new TrendLine(200,20,100,30));
 
-    if($('input:radio[name=line]')[1].checked == true) {
-        console.log("HorizontalLine");
-        state.addLine(new HorizontalLine(50,100));
-    }
+
+    $("#removelast").click(function() {
+        state.removeLast();
+        state.draw();
+    });
+
 })
