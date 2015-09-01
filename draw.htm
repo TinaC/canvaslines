@@ -6,16 +6,17 @@
 <html>
 <head>
 </head>
-<body onload="init();">
+<body>
     <script src="../jq.js" type="text/javascript"></script>
     <script type="text/javascript" src="demojs.js"></script>
     <div align="center">
         <canvas id="canvas" width="500" height="200" style="border:2px solid black"></canvas>
     </div>
         <br /><br />
-        <button>line</button>
-        <button>trend line</button>
-        <button>horizontal line</button>
+        <input type="radio" name="line" value="straight" checked>straight line 
+        <input type="radio" name="line" value="trend">trend line
+        <input type="radio" name="line" value="horizontal">horizontal line
+
         <button>remove last</button>
         <button onclick="javascript:clearArea();return false;">Clear Area</button>
         Line width : <select id="selWidth">
