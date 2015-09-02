@@ -9,9 +9,8 @@ function initialize() {
     var config = {};
     config.canvasele = document.getElementById('canvas');
     config.dotscolor = '#ccc';
-    config.dotsradius = 3;
     config.dotsselected = '#8B8989';
-    config.dotsselectedradius = 4;
+    config.dotsradius = 3;
     config.scope = 6; // 点周围的范围
 
     return config;
@@ -26,7 +25,7 @@ function StraightLine(startX, startY, toX, toY) {
     this.toY = toY;
 }
 
-StraightLine.prototype.draw = function (ctx, drag) {
+StraightLine.prototype.draw = function (ctx) {
     ctx.beginPath();
     ctx.strokeStyle = this.color;
     ctx.lineWidth = this.width;
@@ -44,10 +43,10 @@ StraightLine.prototype.draw = function (ctx, drag) {
     ctx.closePath();
 
     // 选中的线圆圈变掉
-    if (drag) {
+    if (this.selection != null) {
         ctx.beginPath();
-        ctx.strokeStyle = Config.dotsselected;
-        ctx.arc((this.startX + this.toX) / 2, (this.startY + this.toY) / 2, Config.dotsselectedradius , 0, 2 * Math.PI);
+        ctx.strokeStyle = dotsselected;
+        ctx.arc((startX + toX) / 2, (startY + toY) / 2, 3, 0, 2 * Math.PI);
         ctx.fill();
         ctx.closePath();
     }
@@ -71,7 +70,7 @@ function TrendLine(startX, startY, toX, toY) {
     this.toY = toY;
 }
 
-TrendLine.prototype.draw = function (ctx,drag) {
+TrendLine.prototype.draw = function (ctx) {
     var dx = this.toX - this.startX;
     var dy = this.toY - this.startY;
     var scope = dy / dx;
@@ -105,15 +104,6 @@ TrendLine.prototype.draw = function (ctx,drag) {
     ctx.arc((this.startX + this.toX) / 2, (this.startY + this.toY) / 2, Config.dotsradius, 0, 2 * Math.PI);
     ctx.fill();
     ctx.closePath();
-
-    // 选中的线圆圈变掉
-    if (drag) {
-        ctx.beginPath();
-        ctx.strokeStyle = Config.dotsselected;
-        ctx.arc((this.startX + this.toX) / 2, (this.startY + this.toY) / 2, Config.dotsselectedradius , 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.closePath();
-    }
 }
 
 TrendLine.prototype.contains = function (mx, my) {
@@ -171,7 +161,9 @@ function CanvasState(canvas) {
     this.htmlTop = html.offsetTop;
     this.htmlLeft = html.offsetLeft;
 
+
     // **** Keep track of state! ****
+    this.valid = false; // when set to true, the canvas will redraw everything
     this.lines = []; //the collection of things to be
 
     this.drawing = false; //记录是否在画线（straight/trend）,
@@ -182,9 +174,12 @@ function CanvasState(canvas) {
     this.drawy2 = 0;
 
     this.dragging = false;// keep track of when we are dragging
+    // the current selected object. In the future we could turn this into an array for multiple selection
     this.dragobj = null;
-    this.dragoffx = 0;
+    this.dragoffx = 0; // See mousedown and mousemove events for explanation
     this.dragoffy = 0;
+
+
 
     // **** Then events! ****
 
@@ -195,17 +190,21 @@ function CanvasState(canvas) {
     // This is our reference!
     var myState = this;
 
+    // //fixes a problem where double clicking causes text to get selected on the canvas
+    // canvas.addEventListener('selectstart', function(e) { e.preventDefault(); return false; }, false);
+
+    // Up, down, and move are for dragging
     canvas.addEventListener('mousedown', function (e) {
         var mouse = myState.getMouse(e);
         var mx = mouse.x;
         var my = mouse.y;
-        var lines = myState.lines;
-        var l = lines.length;
+        var isline = false; //是否点在点上
 
         //命中测试
         for (var i = l - 1; i >= 0; i--) {
             console.log(lines[i].contains(mx, my));
             if (lines[i].contains(mx, my)) {
+                isline = true;
                 var line = lines[i];
                 myState.dragging = true;
                 myState.dragobj = line;
@@ -222,31 +221,84 @@ function CanvasState(canvas) {
                     myState.dragoffx = my - ((line.startY + line.toY) / 2);
                     return;
                 }
-                else if(line instanceof HorizontalLine) {
+                else (line instanceof HorizontalLine) {
                     myState.dragoffx = mx - line.X;
                     myState.dragoffy = my - line.Y;
                     return;
                 }
+
             }
         }
 
-        if(!myState.dragging) {
-            if (checkbox == 0) {
-                myState.drawingobj = new StraightLine(mx, my, mx, my);
-                myState.drawing = true;
-                myState.draw();
-            } else if (checkbox == 1) {
-                myState.drawingobj = new TrendLine(mx, my, mx, my);
-                myState.drawing = true;
+        //horizontal只有dragging和drawing两种状态，始终都在画线
+        if(checkbox == 2 && !myState.dragging) {
+            myState.drawing = !myState.dragging;
+        }
+
+        if(myState.dragging) {
+            var line = myState.dragobj;
+            if(line instanceof StraightLine) {
+                //点到中点
+                myState.dragoffx = mx - ((line.startX + line.toX) / 2);
+                myState.dragoffx = my - ((line.startY + line.toY) / 2);
+                return;
             }
-            else if (checkbox == 2) {
-                //等mouseup的时候再画
+            if(myState.dragobj instanceof TrendLine) {
+                //点到中点
+                myState.dragoffx = mx - ((line.startX + line.toX) / 2);
+                myState.dragoffx = my - ((line.startY + line.toY) / 2);
+                return;
+            }
+            if(myState.dragobj instanceof HorizontalLine) {
+                //点到中点(只有中点)
+                myState.dragoffx = mx - mySel.X;
+                myState.dragoffy = my - mySel.Y;
                 return;
             }
         }
 
-        myState.draw();
+        //drawing
+        if(myState.drawing){
+            if (checkbox == 0) {
+                myState.drawingobj = new StraightLine(mx, my, mx, my);
+                myState.draw();
+                return;
+            } else if (checkbox == 1) {
+                myState.drawingobj = new TrendLine(mx, my, mx, my);
+                myState.draw();
+                return;
+            }
+            else if (checkbox == 2) {
+                myState.drawingobj = new HorizontalLine(mx, my);
+                myState.draw();
+                return;
+            }
+        }
 
+
+        if (!isline) {
+            if (checkbox == 0) {
+                myState.drawingobj = new StraightLine(mx, my, mx, my);
+                myState.drawing = true;
+                return;
+            } else if (checkbox == 1) {
+                myState.drawingobj = new TrendLine(mx, my, mx, my);
+                myState.drawing = true;
+                return;
+            }
+            else if (checkbox == 2) {
+                myState.addLine(new HorizontalLine(mx, my));
+                myState.draw();  //重画
+                return;
+            }
+        }
+        // havent returned means we have failed to select anything.
+        // If there was an object selected, we deselect it
+        if (myState.dragobj) {
+            myState.dragobj = null;
+            myState.valid = false; // Need to clear the old dragobj border
+        }
+        myState.draw();  //重画
     }, true);  // The event handler is executed in the capturing phase
 
     canvas.addEventListener('mousemove', function (e) {
@@ -254,10 +306,33 @@ function CanvasState(canvas) {
         var mx = mouse.x;
         var my = mouse.y;
 
+        var lines = myState.lines;
+        var l = lines.length;
+        //var isline = false; //是否点到线上的点(false: 增加线，true: 移动线)
+
+        for (var i = l - 1; i >= 0; i--) {
+            //console.log(lines[i].contains(mx, my));
+            //命中测试
+            if (lines[i].contains(mx, my)) {
+                console.log(myState);
+                if(myState.drawing){
+                    //从绘画改为拖动状态
+                    myState.drawing = false;
+                    myState.drawingobj = null;
+
+                    myState.dragging = true;
+                    myState.
+                    console.log(myState.drawingobj);
+                }
+                myState.draw();
+                return;
+                }
+            }
+
+
         if (myState.dragging) {
             if (myState.dragobj instanceof StraightLine) {
                 myState.dragobj.startX = myState.dragobj.startX + (mouse.x - myState.dragoffx);
-
                 myState.dragobj.Y = mouse.y - myState.dragoffx;
                 console.log("new x, y " + myState.dragobj.X + ", " + myState.dragobj.Y);
             }
@@ -271,23 +346,8 @@ function CanvasState(canvas) {
                 myState.dragobj.Y = mouse.y - myState.dragoffx;
                 console.log("new x, y " + myState.dragobj.X + ", " + myState.dragobj.Y);
             }
-        }
 
-        if(myState.drawing){
-            if (checkbox == 0) {
-                myState.drawingobj.toX = mx;
-                myState.drawingobj.toY = my;
-            } else if (checkbox == 1) {
-                myState.drawingobj.toX = mx;
-                myState.drawingobj.toY = my;
-            }
-            else if (checkbox == 2) {
-                myState.drawingobj = new HorizontalLine(mx, my);
-            }
-            myState.draw();
-            return;
         }
-
         //draw new line
         else if (myState.drawing && ((checkbox == 0) || (checkbox == 1))) {
             myState.drawingobj.toX = mouse.x;
@@ -304,14 +364,12 @@ function CanvasState(canvas) {
 
     canvas.addEventListener('mouseup', function (e) {
         if (myState.dragging) {
+            //myState.addLine(myState.drawingobj);
             myState.dragging = false;
-            if(myState.drawingobj instanceof  HorizontalLine) {
-                myState.drawing = true;
-            }
         }
-        else if (myState.drawing) {
+        if (myState.drawing) {
+            console.log(myState.drawingobj);
             myState.addLine(myState.drawingobj);
-            myState.drawingobj = null;
             myState.drawing = false;
         }
     }, true);
@@ -372,39 +430,44 @@ CanvasState.prototype.draw = function () {
     // draw dragobj
     // right now this is just a stroke along the edge of the selected Shape
     //画选中的水平线
-    if (this.dragging){
-        if(this.dragobj instanceof )
-        else if(this.dragobj instanceof HorizontalLine) {
-            console.log("hori selection!");
-            var hori = this.dragobj;
-            ctx.beginPath();
-            ctx.strokeStyle = hori.color;
-            ctx.lineWidth = hori.width;
-            ctx.moveTo(0, hori.Y);
-            ctx.lineTo(Config.canvasele.width, hori.Y);
-            ctx.stroke();
+    if (this.dragobj != null && this.dragobj instanceof HorizontalLine) {
+        console.log("hori selection!");
+        var hori = this.dragobj;
+        ctx.beginPath();
+        ctx.strokeStyle = hori.color;
+        ctx.lineWidth = hori.width;
+        ctx.moveTo(0, hori.Y);
+        ctx.lineTo(Config.canvasele.width, hori.Y);
+        ctx.stroke();
 
-            ctx.beginPath();
-            ctx.fillStyle = Config.dotsselected;
-            ctx.arc(hori.X, hori.Y, Config.dotsradius, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.closePath();
-        }
+        ctx.beginPath();
+        ctx.fillStyle = Config.dotsselected;
+        ctx.arc(hori.X, hori.Y, Config.dotsradius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.closePath();
     } else {
-        //画移动中的的straightline, trendline, horizontalline
+        //画新的straightline, trendline, 待定的horizontalline
+        console.log(this.drawing);
+        console.log(this.drawingobj);
         if (this.drawing) {
-            this.drawingobj.draw(ctx);
+            //this.drawingobj.draw(ctx);
         }
     }
+
+    // ** Add stuff you want drawn on top all the time here **
+
 }
 
 CanvasState.prototype.clear = function () {
     this.ctx.clearRect(0, 0, this.width, this.height);
 }
 
+// Creates an object with x and y defined, set to the mouse position relative to the state's canvas
+// If you wanna be super-correct this can be tricky, we have to worry about padding and borders
 CanvasState.prototype.getMouse = function (e) {
     var element = this.canvas, offsetX = 0, offsetY = 0, mx, my;
 
+    // Compute the total offset 循环计算canvas和所有父类之间的offset
     if (element.offsetParent !== undefined) {
         do {
             offsetX += element.offsetLeft;
@@ -412,12 +475,17 @@ CanvasState.prototype.getMouse = function (e) {
         } while ((element = element.offsetParent));
     }
 
+    // Add padding and border style widths to offset
+    // Also add the <html> offsets in case there's a position:fixed bar
     offsetX += this.stylePaddingLeft + this.styleBorderLeft + this.htmlLeft;
     offsetY += this.stylePaddingTop + this.styleBorderTop + this.htmlTop;
 
     mx = e.pageX - offsetX;
     my = e.pageY - offsetY;
 
+    //console.log("x: " + mx);
+    //console.log("y: " + my);
+    // We return a simple javascript object (a hash) with x and y defined
     return {x: mx, y: my};
 }
 
