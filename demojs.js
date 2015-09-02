@@ -276,6 +276,9 @@ function CanvasState(canvas) {
             myState.dragstartx = mouse.x;
             myState.dragstarty = mouse.y;
         }
+        else if(checkbox ==2) {
+            myState.drawing = true;
+        }
 
         if(myState.drawing){
             if (checkbox == 0 || checkbox == 1) {
@@ -285,22 +288,10 @@ function CanvasState(canvas) {
             else if (checkbox == 2) {
                 myState.drawingobj = new HorizontalLine(mx, my);
             }
-            myState.draw();
-            return;
         }
 
-        //draw new line
-        else if (myState.drawing && ((checkbox == 0) || (checkbox == 1))) {
-            myState.drawingobj.toX = mouse.x;
-            myState.drawingobj.toY = mouse.y;
-
-        }
-        //horizion line的指示线
-        else if (checkbox == 2) {
-            myState.drawing = true;
-            myState.drawingobj = new HorizontalLine(mouse.x, mouse.y);
-        }
         myState.draw();
+
     }, true);
 
     canvas.addEventListener('mouseup', function (e) {
@@ -327,10 +318,7 @@ CanvasState.prototype.addLine = function (line) {
 }
 
 CanvasState.prototype.removeLast = function () {
-    console.log(this.lines);
     return this.lines.pop();
-    //this.draw();
-    //console.log(this.lines);
 }
 
 // While draw is called as often as the INTERVAL variable demands,
