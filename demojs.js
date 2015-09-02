@@ -10,10 +10,9 @@ function initialize() {
     config.canvasele = document.getElementById('canvas');
     config.dotscolor = '#ccc';
     config.dotsradius = 3;
-    config.dotsselected = '#8B8989';
-    config.dotsselectedradius = 4;
+    config.dotscolor2 = 'orange';
+    config.dotsradius2 = 4;
     config.scope = 6; // 点周围的范围
-
     return config;
 }
 
@@ -26,7 +25,7 @@ function StraightLine(startX, startY, toX, toY) {
     this.toY = toY;
 }
 
-StraightLine.prototype.draw = function (ctx, drag) {
+StraightLine.prototype.draw = function (ctx,position) {
     ctx.beginPath();
     ctx.strokeStyle = this.color;
     ctx.lineWidth = this.width;
@@ -43,22 +42,26 @@ StraightLine.prototype.draw = function (ctx, drag) {
     ctx.fill();
     ctx.closePath();
 
-    // 选中的线圆圈变掉
-    if (drag) {
+    if(position != -1) {
         ctx.beginPath();
-        ctx.strokeStyle = Config.dotsselected;
-        ctx.arc((this.startX + this.toX) / 2, (this.startY + this.toY) / 2, Config.dotsselectedradius , 0, 2 * Math.PI);
+        ctx.fillStyle = Config.dotscolor2;
+        if (position == 0) {
+            ctx.arc(this.startX, this.startY, Config.dotsradius2, 0, 2 * Math.PI);
+        }
+        else if (position == 1) {
+            ctx.arc((this.startX + this.toX) / 2, (this.startY + this.toY) / 2, Config.dotsradius2, 0, 2 * Math.PI);
+        }
+        else if (position == 2) {
+            ctx.arc(this.toX, this.toY, Config.dotsradius2, 0, 2 * Math.PI);
+        }
         ctx.fill();
         ctx.closePath();
     }
 }
 
 StraightLine.prototype.contains = function (mx, my) {
-    console.log(mx);
-    console.log((this.startX + this.toX) / 2 + Config.scope);
-
     return ( mx <= ((this.startX + this.toX) / 2 + Config.scope)) && ( mx >= ((this.startX + this.toX) / 2 - Config.scope)) &&
-        ( my <= ((this.startY + this.toY) / 2 + Config.scope)) && ( my >= ((this.startY + this.toX) / 2 - Config.scope));
+        ( my <= ((this.startY + this.toY) / 2 + Config.scope)) && ( my >= ((this.startY + this.toY) / 2 - Config.scope));
 
 }
 
@@ -71,7 +74,7 @@ function TrendLine(startX, startY, toX, toY) {
     this.toY = toY;
 }
 
-TrendLine.prototype.draw = function (ctx,drag) {
+TrendLine.prototype.draw = function (ctx,position) {
     var dx = this.toX - this.startX;
     var dy = this.toY - this.startY;
     var scope = dy / dx;
@@ -106,18 +109,26 @@ TrendLine.prototype.draw = function (ctx,drag) {
     ctx.fill();
     ctx.closePath();
 
-    // 选中的线圆圈变掉
-    if (drag) {
+    if(position != -1) {
         ctx.beginPath();
-        ctx.strokeStyle = Config.dotsselected;
-        ctx.arc((this.startX + this.toX) / 2, (this.startY + this.toY) / 2, Config.dotsselectedradius , 0, 2 * Math.PI);
+        ctx.fillStyle = Config.dotscolor2;
+        if (position == 0) {
+            ctx.arc(this.startX, this.startY, Config.dotsradius2, 0, 2 * Math.PI);
+        }
+        else if (position == 1) {
+            ctx.arc((this.startX + this.toX) / 2, (this.startY + this.toY) / 2, Config.dotsradius2, 0, 2 * Math.PI);
+        }
+        else if (position == 2) {
+            ctx.arc(this.toX, this.toY, Config.dotsradius2, 0, 2 * Math.PI);
+        }
         ctx.fill();
         ctx.closePath();
     }
 }
 
 TrendLine.prototype.contains = function (mx, my) {
-
+    return ( mx <= ((this.startX + this.toX) / 2 + Config.scope)) && ( mx >= ((this.startX + this.toX) / 2 - Config.scope)) &&
+        ( my <= ((this.startY + this.toY) / 2 + Config.scope)) && ( my >= ((this.startY + this.toY) / 2 - Config.scope));
 }
 
 function HorizontalLine(X, Y) {
@@ -127,7 +138,7 @@ function HorizontalLine(X, Y) {
     this.Y = Y;
 }
 
-HorizontalLine.prototype.draw = function (ctx) {
+HorizontalLine.prototype.draw = function (ctx,position) {
     ctx.beginPath();
     ctx.strokeStyle = this.color;
     ctx.lineWidth = this.width;
@@ -141,6 +152,13 @@ HorizontalLine.prototype.draw = function (ctx) {
     ctx.fill();
     ctx.closePath();
 
+    if(position == 1) {
+        ctx.beginPath();
+        ctx.fillStyle = Config.dotscolor2;
+        ctx.arc(this.X, this.Y, Config.dotsradius2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.closePath();
+    }
 }
 
 HorizontalLine.prototype.contains = function (mx, my) {
@@ -174,7 +192,7 @@ function CanvasState(canvas) {
     // **** Keep track of state! ****
     this.lines = []; //the collection of things to be
 
-    this.drawing = false; //记录是否在画线（straight/trend）,
+    this.drawing = false;
     this.drawingobj = null;
     this.drawx1 = 0;
     this.drawy1 = 0;
@@ -183,16 +201,9 @@ function CanvasState(canvas) {
 
     this.dragging = false;// keep track of when we are dragging
     this.dragobj = null;
-    this.dragoffx = 0;
-    this.dragoffy = 0;
+    this.dragstartx = 0;
+    this.dragstarty = 0;
 
-    // **** Then events! ****
-
-    // This is an example of a closure!
-    // Right here "this" means the CanvasState. But we are making events on the Canvas itself,
-    // and when the events are fired on the canvas the variable "this" is going to mean the canvas!
-    // Since we still want to use this particular CanvasState in the events we have to save a reference to it.
-    // This is our reference!
     var myState = this;
 
     canvas.addEventListener('mousedown', function (e) {
@@ -211,20 +222,18 @@ function CanvasState(canvas) {
                 myState.dragobj = line;
                 myState.drawing = false;
                 if(line instanceof StraightLine){
-                    //点到中点
-                    myState.dragoffx = mx - ((line.startX + line.toX) / 2);
-                    myState.dragoffx = my - ((line.startY + line.toY) / 2);
+                    myState.dragstartx = mx;
+                    myState.dragstarty = my;
                     return;
                 }
                 else if(line instanceof TrendLine){
-                    //点到中点
-                    myState.dragoffx = mx - ((line.startX + line.toX) / 2);
-                    myState.dragoffx = my - ((line.startY + line.toY) / 2);
+                    myState.dragstartx = mx;
+                    myState.dragstarty = my;
                     return;
                 }
                 else if(line instanceof HorizontalLine) {
-                    myState.dragoffx = mx - line.X;
-                    myState.dragoffy = my - line.Y;
+                    myState.dragstartx = mx;
+                    myState.dragstarty = my;
                     return;
                 }
             }
@@ -255,29 +264,21 @@ function CanvasState(canvas) {
         var my = mouse.y;
 
         if (myState.dragging) {
-            if (myState.dragobj instanceof StraightLine) {
-                myState.dragobj.startX = myState.dragobj.startX + (mouse.x - myState.dragoffx);
-
-                myState.dragobj.Y = mouse.y - myState.dragoffx;
-                console.log("new x, y " + myState.dragobj.X + ", " + myState.dragobj.Y);
-            }
-            if (myState.dragobj instanceof TrendLine) {
-                myState.dragobj.X = mouse.x - myState.dragoffx;
-                myState.dragobj.Y = mouse.y - myState.dragoffx;
-                console.log("new x, y " + myState.dragobj.X + ", " + myState.dragobj.Y);
-            }
             if (myState.dragobj instanceof HorizontalLine) {
-                myState.dragobj.X = mouse.x - myState.dragoffx;
-                myState.dragobj.Y = mouse.y - myState.dragoffx;
-                console.log("new x, y " + myState.dragobj.X + ", " + myState.dragobj.Y);
+                myState.dragobj.X += mouse.x - myState.dragstartx;
+                myState.dragobj.Y += mouse.y - myState.dragstarty;
+            } else {
+                myState.dragobj.startX +=  mouse.x - myState.dragstartx;
+                myState.dragobj.startY +=  mouse.y - myState.dragstarty;
+                myState.dragobj.toX += mouse.x - myState.dragstartx;
+                myState.dragobj.toY += mouse.y - myState.dragstarty;
             }
+            myState.dragstartx = mouse.x;
+            myState.dragstarty = mouse.y;
         }
 
         if(myState.drawing){
-            if (checkbox == 0) {
-                myState.drawingobj.toX = mx;
-                myState.drawingobj.toY = my;
-            } else if (checkbox == 1) {
+            if (checkbox == 0 || checkbox == 1) {
                 myState.drawingobj.toX = mx;
                 myState.drawingobj.toY = my;
             }
@@ -306,6 +307,8 @@ function CanvasState(canvas) {
         if (myState.dragging) {
             myState.dragging = false;
             if(myState.drawingobj instanceof  HorizontalLine) {
+                //要加入进Lines栈，否则remove last会有Bug
+                myState.addLine(myState.drawingobj);
                 myState.drawing = true;
             }
         }
@@ -316,22 +319,6 @@ function CanvasState(canvas) {
         }
     }, true);
 
-    //canvas.addEventListener('mouseenter', function (e) {
-    //    if (checkbox == 2) {
-    //        var mouse = myState.getMouse(e);
-    //        myState.addLine(new HorizontalLine(mouse.x, mouse.y));
-    //    }
-    //});
-
-    //canvas.addEventListener('mouseout', function (e) {
-    //    if (checkbox == 2) {
-    //        myState.removeLast();
-    //    }
-    //});
-
-    //this.selectionWidth = 2;
-    //this.interval = 3000;
-    //setInterval(function() { myState.draw(); }, myState.interval);
 
 }
 
@@ -351,49 +338,33 @@ CanvasState.prototype.removeLast = function () {
 CanvasState.prototype.draw = function () {
     var ctx = this.ctx;
     var lines = this.lines;
+    var l = lines.length;
     this.clear();
 
-    // ** Add stuff you want drawn in the background all the time here **
-
-    // draw all shapes
-    var l = lines.length;
-
-    console.log(lines);
+    //console.log(lines);
 
     for (var i = 0; i < l; i++) {
         var line = lines[i];
         // We can skip the drawing of elements that have moved off the screen:
         if (line.x > this.width || line.y > this.height ||
             line.x + line.w < 0 || line.y + line.h < 0) continue;
-
-        lines[i].draw(ctx);
+        lines[i].draw(ctx,-1);
     }
 
     // draw dragobj
     // right now this is just a stroke along the edge of the selected Shape
     //画选中的水平线
     if (this.dragging){
-        if(this.dragobj instanceof )
-        else if(this.dragobj instanceof HorizontalLine) {
-            console.log("hori selection!");
-            var hori = this.dragobj;
-            ctx.beginPath();
-            ctx.strokeStyle = hori.color;
-            ctx.lineWidth = hori.width;
-            ctx.moveTo(0, hori.Y);
-            ctx.lineTo(Config.canvasele.width, hori.Y);
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.fillStyle = Config.dotsselected;
-            ctx.arc(hori.X, hori.Y, Config.dotsradius, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.closePath();
-        }
+        //暂时只考虑拖动中点
+        this.dragobj.draw(ctx,1);
     } else {
         //画移动中的的straightline, trendline, horizontalline
         if (this.drawing) {
-            this.drawingobj.draw(ctx);
+            if(this.drawingobj instanceof HorizontalLine) {
+                this.drawingobj.draw(ctx,1);
+            }
+            else
+                this.drawingobj.draw(ctx,2);
         }
     }
 }
