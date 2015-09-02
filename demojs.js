@@ -327,9 +327,7 @@ CanvasState.prototype.draw = function () {
     var ctx = this.ctx;
     var lines = this.lines;
     var l = lines.length;
-    this.clear();
-
-    //console.log(lines);
+    this.ctx.clearRect(0, 0, this.width, this.height);
 
     for (var i = 0; i < l; i++) {
         var line = lines[i];
@@ -339,25 +337,36 @@ CanvasState.prototype.draw = function () {
         lines[i].draw(ctx,-1);
     }
 
-    // draw dragobj
-    // right now this is just a stroke along the edge of the selected Shape
     //画选中的水平线
     if (this.dragging){
         //暂时只考虑拖动中点
         this.dragobj.draw(ctx,1);
-    } else {
-        //画移动中的的straightline, trendline, horizontalline
-        if (this.drawing) {
-            if(this.drawingobj instanceof HorizontalLine) {
-                this.drawingobj.draw(ctx,1);
-            }
-            else
-                this.drawingobj.draw(ctx,2);
+    } //画移动中的的straightline, trendline, horizontalline
+    else if (this.drawing) {
+        if (this.drawingobj instanceof HorizontalLine) {
+            this.drawingobj.draw(ctx, 1);
         }
+        else
+            this.drawingobj.draw(ctx, 2);
     }
 }
 
 CanvasState.prototype.clear = function () {
+    //reset
+    this.lines.length = 0; //the collection of things to be
+
+    this.drawing = false;
+    this.drawingobj = null;
+    this.drawx1 = 0;
+    this.drawy1 = 0;
+    this.drawx2 = 0;
+    this.drawy2 = 0;
+
+    this.dragging = false;// keep track of when we are dragging
+    this.dragobj = null;
+    this.dragstartx = 0;
+    this.dragstarty = 0;
+    
     this.ctx.clearRect(0, 0, this.width, this.height);
 }
 
@@ -417,5 +426,9 @@ $(document).ready(function () {
         state.removeLast();
         state.draw();
     });
+
+    $("#clear").click(function() {
+        state.clear();
+    })
 
 })
