@@ -366,7 +366,7 @@ CanvasState.prototype.clear = function () {
     this.dragobj = null;
     this.dragstartx = 0;
     this.dragstarty = 0;
-    
+
     this.ctx.clearRect(0, 0, this.width, this.height);
 }
 
